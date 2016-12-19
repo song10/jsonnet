@@ -21,6 +21,18 @@ limitations under the License.
 
 #include "libjsonnet.h"
 
+#if PY_MAJOR_VERSION >= 3
+#define PYTHON3
+#endif
+
+#ifdef PYTHON3
+#define PyInt_Check         PyLong_Check
+#define PyInt_AsLong        PyLong_AsLong
+#define PyString_Check      PyUnicode_Check
+#define PyString_AsString   PyUnicode_AsUTF8
+#define PyString_FromString PyUnicode_FromString
+#endif
+
 static char *jsonnet_str(struct JsonnetVm *vm, const char *str)
 {
     char *out = jsonnet_realloc(vm, NULL, strlen(str) + 1);
@@ -108,7 +120,7 @@ static struct JsonnetJsonValue *python_to_jsonnet_json(struct JsonnetVm *vm, PyO
     }
 }
 
-/* This function is bound for every native callback, but with a different 
+/* This function is bound for every native callback, but with a different
  * context.
  */
 static struct JsonnetJsonValue *cpython_native_callback(
@@ -242,7 +254,7 @@ int handle_vars(struct JsonnetVm *vm, PyObject *map, int code, int tla)
 
     PyObject *key, *val;
     Py_ssize_t pos = 0;
-    
+
     while (PyDict_Next(map, &pos, &key, &val)) {
         const char *key_ = PyString_AsString(key);
         if (key_ == NULL) {
@@ -352,7 +364,7 @@ static int handle_native_callbacks(struct JsonnetVm *vm, PyObject *native_callba
     }
 
     *ctxs = malloc(sizeof(struct NativeCtx) * num_natives);
-    
+
     /* Re-use num_natives but just as a counter this time. */
     num_natives = 0;
     pos = 0;
@@ -498,8 +510,32 @@ static PyMethodDef module_methods[] = {
     {NULL, NULL, 0, NULL}
 };
 
+#ifndef PYTHON3
 PyMODINIT_FUNC init_jsonnet(void)
 {
     Py_InitModule3("_jsonnet", module_methods, "A Python interface to Jsonnet.");
 }
 
+#else
+//Module definition
+//The arguments of this structure tell Python what to call your extension,
+//what it's methods are and where to look for it's method definitions
+static struct PyModuleDef jsonnet_module_definition = {
+    PyModuleDef_HEAD_INIT,
+    "jsonnet_module",
+    "A Python module that processes jsonnet files.",
+    -1,
+    module_methods
+};
+
+//Module initialization
+//Python calls this function when importing your extension. It is important
+//that this function is named PyInit_[[your_module_name]] exactly, and matches
+//the name keyword argument in setup.py's setup() call.
+PyMODINIT_FUNC PyInit__jsonnet(void)
+{
+    Py_Initialize();
+
+    return PyModule_Create(&jsonnet_module_definition);
+}
+#endif
